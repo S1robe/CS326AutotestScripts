@@ -1,0 +1,69 @@
+#!/bin/bash
+
+if ! cd Phase4; then
+	echo "No Phase 4 dir, exiting!"
+	exit 1
+fi
+
+
+rm -rf "tests/"
+
+mkdir "tests"
+
+if ! tar -xf "../tests.tar" -C "./tests/" ; then
+	echo "Extraction Failed. make sure file is named \"tests.tar\"."
+	exit 1
+fi
+
+if ! [ -f "./espressoc" ]; then 
+	echo "Missing espressoc, cannot continue without this."
+	exit 1
+fi
+
+for i in ./tests/*
+do
+
+	FILENAME="${i##*/}"
+	TEST="${FILENAME%%.*}"
+	FILE="$TEST"
+	
+	if ! ./espressoc "$i" > /dev/null ; then # compile
+		echo "Compile Failed... $i"
+		exit 1
+	fi
+
+	mkdir "./tests/$FILE/"		      # make filename directory
+	mv -- *.j "$i" "./tests/$FILE"	      # move all compiled stuffs there
+done
+
+if ! cp -r "./Lib/" "./tests"; then
+	echo "Copy of ./Lib to ./tests failed, youll need to make the archive yourself.\n
+	Put \"Lib\" into ./tests, then tar it with\n 
+	\'tar -cf compTests.tar ./tests/*\'"
+	exit 1
+fi
+
+if ! tar -cf "compTests.tar" ./tests/*; then
+	echo "Compression of Tests failed\n Try: \'tar -cf compTests.tar ./tests/*\'"
+	exit 1
+fi
+
+rm -rf "tests/"
+
+
+if ! [ -z ${CHAIN+x} ] && [ $CHAIN -eq 2 ]; then
+	cd ..
+	./evmu tar 4 > /dev/null
+	cd Phase4
+	read -p "Enter your school username:" user
+	scp EVM-Phase4-* "$user@java.cs.unlv.edu:~"
+	cd ..
+	ssh -t "$user@java.cs.unlv.edu" 'mkdir Phase4;tar xf EVM-Phase4-'$user'.tar -C Phase4/; exit'
+	scp ./compTests.tar ./finalTest "$user@java.cs.unlv.edu:~"
+	ssh -t "$user@java.cs.unlv.edu" 'chmod +x ./finalTest;./finalTest; exit'
+	exit 0
+fi
+
+
+echo "Compressed test cases made, run either Main.j or <foldername>.j for test."
+exit 0

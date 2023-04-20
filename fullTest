@@ -1,0 +1,20 @@
+#!/bin/bash
+
+#./test <archive> -> ./maketests -> scp/ssh -> ./testComp
+
+if ! [ -f "./firstTest" ]; then 
+	echo -e "Missing \"firstTest\", make sure its in this directory\n"
+	exit 1
+fi
+if ! [ -f "./compileTests" ]; then
+	echo -e "Missing \"compTest\", make sure its in this directory\n"
+	exit 1
+fi
+
+
+if ! [ -f "./finalTest" ]; then
+	echo -e "Missing \"finalTest\", make sure its in this directory\n"
+	exit 1
+fi
+
+exec env CHAIN=1 ./firstTest $1

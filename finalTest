@@ -1,0 +1,86 @@
+#!/bin/bash
+
+if ! cd Phase4; then
+	echo "No Phase4 Directory, exiting"
+	exit 1
+fi
+
+echo "This will create several directories from compTests.tar, run the test cases and then exit."
+
+
+
+if ! [ -f "../compTests.tar" ]; then
+	echo -e "Missing compTests.tar, unable to continue.\n It should be in the same directory as this."
+	exit 1
+fi
+
+if ! [ -f "./evm" ]; then
+	echo -e "Missing ./evm, unable to continue."
+	exit 1
+fi
+
+rm -rf "./tests"
+
+if ! tar -xf "../compTests.tar"; then
+	echo "Extraction failed!"
+	exit 1
+fi
+
+rm -- *.j > /dev/null
+
+mv -f ./tests/Lib/ ./ >/dev/null # move Lib from test to here
+
+rm -rf "pass/" "fail/" > /dev/null &
+wait
+
+mkdir {pass,fail} 
+
+# Clean old build files
+if ! ant clean 1> /dev/null 2> ./error.log; then
+	echo "ant clean emitted errors, tests may not be accurate. See error.log for details."
+fi
+
+# Test for building, exit if failure
+if ! ant 1> /dev/null 2> ./error.log; then
+  echo "Compilation Failed! See error.log for details."
+  exit 1
+fi
+
+
+
+for i in ./tests/* # Directory of Directories
+do
+	cp "$i/"* "./"
+	
+	TEST=${i##*/} # trim to last /
+	FILE="$TEST"
+	
+	# if Main.j is created then we know this test runs Main.j
+	if [ -f "Main.j" ]; then 
+		TEST="Main"
+	fi
+
+
+	if ! ./evm "-log" "$TEST"; then
+		echo -e "\n$FILE Failed\n"
+		mv -f "EVM.log" "EVM-$FILE.log" 
+		mv -f -- *.j "$FILE.java" "./fail/"
+		mv -f "EVM-$FILE.log" "./fail"
+		read -n1 -rp "Press any key to continue..."
+	else
+		mv -f "EVM.log" "EVM-$FILE.log" 
+		mv -f -- *.j "$FILE.java" "./pass/"
+		mv -f "EVM-$FILE.log" "./pass"
+	fi
+
+
+	
+	rm -- *.j > /dev/null &
+	wait
+
+	clear
+done
+
+echo -e "Done!\n if there were any fails, they will be in ./fail"
+
+exit 0

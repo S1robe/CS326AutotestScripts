@@ -1,0 +1,159 @@
+#!/bin/bash
+
+# Author: Garrett Prentice
+if ! cd Phase4; then
+	echo "No Phase4 Directorty, exiting"
+	exit 1
+fi
+
+echo "By running this you accept full responsiblility for *anything* that might happen as a result of running this program."
+
+read -p 'Enter "Y" to Proceed.' -r input
+if ! [ "$input" = "Y" ]; then
+	exit 0
+fi
+
+
+# Check for positioning
+# CWDIR="${PWD##*/}" 
+TESTS="../tests.tar"
+# if ! [ "$CWDIR" = "Phase4" ]; then
+# 	echo "This script should only be ran in a directory that can build the evm project"
+# 	read -p 'Enter "Y" to try run anyway.' -r input
+# 	if ! [ "$input" = "Y" ]; then
+# 		exit 0
+# 	fi
+# fi
+
+if ! [ -f "./evm" ]; then
+	echo "Missing evm executable, script cannot continue."
+fi
+
+if ! [ -f "./espressoc" ]; then
+	echo "Missing espressoc executable, script cannot continue."
+fi
+
+
+# if ./test.sh && ./tests ! exist
+if [ $# -eq 0 ] && ! [ -f "$TESTS" ]; then
+	echo "Cannot find tests.tar, ensure it is in the same directory as this script and re-run."
+	exit 1
+
+elif [ $# -eq 1 ]; then
+	TESTS="${1##*/}"
+	TESTS="../${TESTS%%.*}.tar" # must be ./<name>.tar
+	# if it doesnt exist
+	if ! [ -f "$TESTS" ]; then
+		echo "Could not find ../$TESTS.tar, make sure $TESTS is a tar archive and in the same directory as this script."
+		exit 1
+	fi
+	mv "$TESTS" "../tests.tar"
+fi
+
+# Clean old build files
+if ! ant clean 1> /dev/null 2> ./error.log; then
+	echo "ant clean emitted errors, tests may not be accurate. See error.log for details."
+fi
+
+# Test for building, exit if failure
+if ! ant 1> /dev/null 2> ./error.log; then
+  echo "Compilation Failed! See error.log for details."
+  exit 1
+fi
+
+
+# Clean from last time.
+rm -rf tests/ >/dev/null &
+rm -rf pass/ >/dev/null &
+rm -rf fail/ >/dev/null &
+rm -- *.j > /dev/null &
+rm ./error.log > /dev/null &
+
+wait 
+
+mkdir {pass,fail,tests} 1> /dev/null 2> /dev/null
+
+tar -xf "../tests.tar" -C ./tests/ 1> /dev/null 2> ./error.log &
+RET=$?
+wait
+
+# Unzip tests.tar
+if [ "$RET" -eq 1 ]; then
+	echo "Test Tar Archive extraction failed! Code: $RET; see error.log for details."
+	exit 1
+fi
+
+# Roll through tests
+for i in ./tests/*
+do
+	./espressoc "$i" 1> /dev/null 2>> ./error.log &
+	RET=$?
+	wait
+	
+	if [ "$RET" -eq 1 ]; then
+		echo "Espressoc failed, see error.log for details."
+		exit 1
+	fi
+	
+	FILENAME="${i##*/}" # cut down to the full filename
+	TESTNAME="${FILENAME%%.*}" # cut the . off
+	FILENAME="$TESTNAME"
+	
+
+	echo "Test-$TESTNAME: "
+
+	if [ -f "./Main.j" ]; then
+		TESTNAME="Main"
+	fi
+
+	# If success move on.
+
+	if ./evm "$TESTNAME" 2>> ./error.log ; then
+		mv EVM.log EVM-"$FILENAME".log 2>> ./error.log
+		mv "$i" EVM-"$FILENAME".log pass/  2>> ./error.log
+		echo "Pass"
+
+	# IF program fails halt for user to inspect trace/error logs
+	else
+		echo "$TESTNAME" >> ./error.log
+		mv EVM.log EVM-"$FILENAME".log 2>> ./error.log
+		mv "$i" EVM-"$FILENAME".log fail/  2>> ./error.log
+		echo "Fail"
+		read -n1 -rp 'Press any key to continue...'
+	fi
+
+	rm -- *.j > /dev/null &
+	wait
+	clear
+done
+
+
+if [ -f "./error.log" ]; then
+
+	if [ -s "./error.log" ]; then 
+
+		echo "Errors emitted during runtime, check error.log for more details"
+
+
+		# Report Negative Results
+		echo "Failed Tests:"
+
+		find ./fail -type f -name "*.java" -exec echo "${i##*/}" {} +
+
+
+		echo -e "\nSee ./fail for test cases and failed logs.\n"
+	fi
+	
+fi
+# Cleanup compiled files
+rm -- *.j > /dev/null
+
+# Cleanup test dir
+rm -rf "tests/" >/dev/null
+
+cd ..
+if ! [ -z ${CHAIN+x} ] && [ $CHAIN -eq 1 ]; then
+	exec env CHAIN=2 ./compileTests
+fi
+
+exit 0
