@@ -1,0 +1,50 @@
+#!/bin/bash
+
+echo "By running this you accept full responsiblility for *anything* that might happen as a result of running this program."
+
+read -p 'Enter "Y" to Proceed.' -r input
+if ! [ "$input" = "Y" ]; then
+	exit 0
+fi
+
+# try to run firstTest for updated results!
+if ! [ -f ./firstTest ]; then
+	echo "Unable to run firstTest, assuming directories exist already..."
+else
+	./firstTest
+fi
+
+if ! [ -d Phase4 ]; then
+	echo "This script should be run in a directory that can see the Phase4 directory."
+	exit 1
+fi
+
+cd Phase4
+
+rm -rf expected 2> /dev/null
+
+
+# make directory for results
+if ! mkdir expected; then
+	echo "Unable to create extraction directory, cannot continue..."
+	exit 1
+fi
+
+if ! [ -f ../files.tar ]; then
+	echo "Unable to find Dr. C's expected files, exiting"
+	exit 1
+fi
+
+# extract Dr.C's files
+if ! tar -xf ../files.tar -C expected; then
+	exit 1
+fi
+
+for i in pass/*.log
+do
+	FILENAME=${i##*/}
+	diff "pass/$FILENAME" "expected/pass/$FILENAME" >> results.txt
+done
+
+echo "Please see results.txt for all differences between files, if this is blank, there were no differences!"
+exit 0
